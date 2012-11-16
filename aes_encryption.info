@@ -1,0 +1,4 @@
+name = AES Encryption
+description = Provides AES encryption.
+core = 7.x
+package = Security

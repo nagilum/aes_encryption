@@ -1,0 +1,29 @@
+<?php
+
+/**
+ * @file
+ * Provides install, and uninstall, logic for the AES Encryption module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function aes_encryption_install() {
+  require_once drupal_get_path('module', 'aes_encryption') . '/aes_encryption.module';
+
+  $cipher = 'rijndael-128';
+  $key = aes_encryption_get_key();
+  $iv = aes_encryption_generate_iv($cipher);
+
+  variable_set('aes_encryption_cipher', $cipher);
+  variable_set('aes_encryption_iv', base64_encode($iv));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function aes_encryption_uninstall() {
+  variable_del('aes_encryption_cipher');
+  variable_del('aes_encryption_key');
+  variable_del('aes_encryption_iv');
+}

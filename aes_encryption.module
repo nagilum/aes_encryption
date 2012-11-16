@@ -1,0 +1,415 @@
+<?php
+
+/**
+ * @file
+ * Provides AES encryption.
+ */
+
+/**
+ * Implemens hook_menu().
+ */
+function aes_encryption_menu() {
+  $items = array();
+
+  $items['admin/config/aes-encryption'] = array(
+    'title'            => 'AES Settings',
+    'description'      => 'Configure the AES Encryption module.',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('aes_encryption_config'),
+    'access arguments' => array('administer aes_encryption'),
+    'file'             => 'aes_encryption.admin.inc'
+  );
+
+  $items['ajax-callback/aes-encryption'] = array(
+    'page callback'    => 'aes_encryption_ajax_callback',
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function aes_encryption_permission() {
+  return array(
+    'administer aes_encryption' => array(
+      'title'       => t('Administer AES Encryption'),
+      'description' => t('Administer the AES Encryption module.'),
+    ),
+  );
+}
+
+/**
+ * Implements the callback for ajax call: 'ajax-callback/aes-encryption'.
+ *
+ * It checks for $_POST vars to call for encryption/decryption.
+ *
+ * @return string
+ *   The encrypted/decrypted text.
+ */
+function aes_encryption_ajax_callback() {
+  $method = (isset($_POST['method']) ? $_POST['method'] : '');
+  $string = (isset($_POST['string']) ? $_POST['string'] : '');
+  $key = (isset($_POST['key']) ? $_POST['key'] : NULL);
+  $output = '';
+
+  switch ($method) {
+    case 'encrypt':
+      $output = aes_encryption_encrypt($string, $key);
+      break;
+
+    case 'decrypt':
+      $output = aes_encryption_decrypt($string, $key);
+      break;
+
+    default:
+      break;
+  }
+
+  echo ($output);
+}
+
+/**
+ * Encrypts the given string using AES encryption.
+ *
+ * @param string $string
+ *   The text to be encrypted.
+ * @param bool $base64encode
+ *   Should the output, and IV, be base64-encoded?
+ * @param string $cipher
+ *   (optional) The cipher method to use for encryption.
+ * @param string $key
+ *   (optional) The key to use for encryption.
+ * @param string $iv
+ *   (optional) The initialization vector to use for encryption.
+ *
+ * @return string
+ *   The encrypted text.
+ */
+function aes_encryption_encrypt($string, $base64encode = TRUE, $cipher = NULL, $key = NULL, $iv = NULL) {
+  if (empty($string)) {
+    watchdog(
+      'aes_encryption',
+      'The string to encrypt cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_encrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  if (empty($cipher)) {
+    $cipher = variable_get('aes_encryption_cipher', 'rijndael-256');
+    if (empty($cipher)) {
+      $cipher = MCRYPT_RIJNDAEL_256;
+      variable_set('aes_encryption_cipher', $cipher);
+    }
+  }
+
+  if (empty($key)) {
+    $key = aes_encryption_get_key();
+  }
+
+  if (empty($iv)) {
+    $iv = base64_decode(variable_get('aes_encryption_iv', ''));
+    if (empty($iv)) {
+      $iv = aes_encryption_generate_iv($cipher);
+      variable_set('aes_encryption_iv', base64_encode($iv));
+    }
+  }
+
+  if (empty($cipher)) {
+    watchdog(
+      'aes_encryption',
+      'The cipher method cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_encrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  if (empty($key)) {
+    watchdog(
+      'aes_encryption',
+      'The key cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_encrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  if (empty($iv)) {
+    watchdog(
+      'aes_encryption',
+      'The initialization vector cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_encrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  $encrypted_text = mcrypt_encrypt(
+    $cipher,
+    $key,
+    $string,
+    MCRYPT_MODE_CBC,
+    $iv
+  );
+
+  if ($base64encode) {
+    $encrypted_text = base64_encode($encrypted_text);
+  }
+
+  return $encrypted_text;
+}
+
+/**
+ * Decrypts the given string using AES encryption.
+ *
+ * @param string $string
+ *   The text to be encrypted.
+ * @param bool $base64encoded
+ *   Should the $string be base64decoded before decrypted?
+ * @param string $cipher
+ *   (optional) The cipher method to use for encryption.
+ * @param string $key
+ *   (optional) The key to use for encryption.
+ * @param string $iv
+ *   (optional) The initialization vector to use for encryption.
+ *
+ * @return string
+ *   The decrypted text.
+ */
+function aes_encryption_decrypt($string, $base64encoded = TRUE, $cipher = NULL, $key = NULL, $iv = NULL) {
+  if (empty($string)) {
+    watchdog(
+      'aes_encryption',
+      'The string to encrypt cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_decrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  if (empty($cipher)) {
+    $cipher = variable_get('aes_encryption_cipher', 'rijndael-256');
+    if (empty($cipher)) {
+      $cipher = MCRYPT_RIJNDAEL_256;
+      variable_set('aes_encryption_cipher', $cipher);
+    }
+  }
+
+  if (empty($key)) {
+    $key = aes_encryption_get_key();
+  }
+
+  if (empty($iv)) {
+    $iv = base64_decode(variable_get('aes_encryption_iv', ''));
+  }
+
+  if (empty($cipher)) {
+    watchdog(
+      'aes_encryption',
+      'The cipher method cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_decrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  if (empty($key)) {
+    watchdog(
+      'aes_encryption',
+      'The key cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_decrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  if (empty($iv)) {
+    watchdog(
+      'aes_encryption',
+      'The initialization vector cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_decrypt',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  if ($base64encoded) {
+    $string = base64_decode($string);
+  }
+
+  $decrypted_text = mcrypt_decrypt(
+    $cipher,
+    $key,
+    $string,
+    MCRYPT_MODE_CBC,
+    $iv
+  );
+
+  return $decrypted_text;
+}
+
+/**
+ * Loads, or generates, the key to be used in cryption.
+ *
+ * @return string
+ *   The loaded, or generated, key.
+ */
+function aes_encryption_get_key() {
+  $key_crypt_key = 'hux3kUm2tetratrEsWuCha9ucRuSaTux';
+  $key = variable_get('aes_encryption_key', '');
+
+  if (empty($key)) {
+    $key = aes_encryption_generate_key(32);
+    variable_set('aes_encryption_key', aes_encrypt($key, TRUE, NULL, $key_crypt_key, NULL));
+  }
+  else {
+    $key = aes_decrypt($key, TRUE, NULL, $key_crypt_key, NULL);
+  }
+
+  return $key;
+}
+
+/**
+ * Generates a random key of 32 bytes to be used for cryption.
+ *
+ * @return string
+ *   The randomly generated key.
+ */
+function aes_encryption_generate_key($length = 32) {
+  $acceptable = FALSE;
+  $valid_chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890';
+  $key = '';
+
+  while ($acceptable === FALSE) {
+    $key = '';
+
+    while (strlen($key) < $length) {
+      $key .= substr($valid_chars, rand(0, strlen($valid_chars)), 1);
+    }
+
+    $acceptable = TRUE;
+
+    $re_results_1 = preg_match("/.*[a-z].*/", $key);
+    $re_results_2 = preg_match("/.*[A-Z].*/", $key);
+    $re_results_3 = preg_match("/.*[0-9].*/", $key);
+
+    if ($re_results_1 == 0 ||
+        $re_results_2 == 0 ||
+        $re_results_3 == 0) {
+      $acceptable = FALSE;
+    }
+  }
+
+  return $key;
+}
+
+/**
+ * Generates an initialization vector for the cryption.
+ *
+ * @param string $cipher
+ *   (optional) The cipher method to use for encryption.
+ *
+ * @return string
+ *   The generated IV.
+ */
+function aes_encryption_generate_iv($cipher = NULL) {
+  if (empty($cipher)) {
+    $cipher = variable_get('aes_encryption_cipher', 'rijndael-256');
+    if (empty($cipher)) {
+      $cipher = MCRYPT_RIJNDAEL_256;
+      variable_set('aes_encryption_cipher', $cipher);
+    }
+  }
+
+  if (empty($cipher)) {
+    watchdog(
+      'aes_encryption',
+      'The cipher method cannot be empty in %function!',
+      array(
+        '%function' => 'aes_encryption_generate_iv',
+      ),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  $iv_size = mcrypt_get_iv_size($cipher, MCRYPT_MODE_CBC);
+  $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
+
+  return $iv;
+}
+
+/**
+ * Encrypts the given string using AES encryption.
+ *
+ * This is a shorthand call to the actual function aes_encryption_encrypt().
+ *
+ * @param string $string
+ *   The text to be encrypted.
+ * @param bool $base64encode
+ *   Should the output, and IV, be base64-encoded?
+ * @param string $cipher
+ *   (optional) The cipher method to use for encryption.
+ * @param string $key
+ *   (optional) The key to use for encryption.
+ * @param string $iv
+ *   (optional) The initialization vector to use for encryption.
+ *
+ * @return string
+ *   The encrypted text.
+ */
+function aes_encrypt($string, $base64encode = TRUE, $cipher = NULL, $key = NULL, $iv = NULL) {
+  return aes_encryption_encrypt($string, $base64encode, $cipher, $key, $iv);
+}
+
+/**
+ * Decrypts the given string using AES encryption.
+ *
+ * This is a shorthand call to the actual function aes_encryption_decrypt().
+ *
+ * @param string $string
+ *   The text to be encrypted.
+ * @param bool $base64encoded
+ *   Should the $string be base64decoded before decrypted?
+ * @param string $cipher
+ *   (optional) The cipher method to use for encryption.
+ * @param string $key
+ *   (optional) The key to use for encryption.
+ * @param string $iv
+ *   (optional) The initialization vector to use for encryption.
+ *
+ * @return string
+ *   The decrypted text.
+ */
+function aes_decrypt($string, $base64encoded = TRUE, $cipher = NULL, $key = NULL, $iv = NULL) {
+  return aes_encryption_decrypt($string, $base64encoded, $cipher, $key, $iv);
+}
