@@ -1,4 +1,4 @@
-# aes_encryption (AES Encryption)
+# AES Encryption (aes_encryption)
 
 This module provides easy functions to encrypt and decrypt data using the AES (rijndael) algorithm.
 
