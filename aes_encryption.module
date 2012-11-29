@@ -11,7 +11,17 @@
 function aes_encryption_menu() {
   $items = array();
 
-  $items['admin/config/aes-encryption'] = array(
+  $items['admin/config/security'] = array(
+    'title'            => 'Security',
+    'description'      => 'A collection of security utilities for the developer',
+    'position'         => 'left',
+    'weight'           => -100,
+    'page callback'    => 'system_admin_menu_block_page',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'system.admin.inc',
+    'file path'        => drupal_get_path('module', 'system'),
+  );
+  $items['admin/config/security/aes-encryption'] = array(
     'title'            => 'AES Settings',
     'description'      => 'Configure the AES Encryption module.',
     'page callback'    => 'drupal_get_form',
